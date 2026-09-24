@@ -306,22 +306,178 @@ await RNNOS.presentNotification({
 
 ---
 
+## 🔔 In-App Heads-Up Toasts (`<NotificationBannerContainer />`)
+
+Say goodbye to third-party flash message/toast libraries! RNNOS includes an interactive, gesture-driven Heads-Up In-App Toast banner component. It automatically animates down when a notification arrives while the user is using the app:
+
+```tsx
+import React from 'react';
+import { RNNOS, NotificationBannerContainer } from 'react-native-notification-os';
+
+export default function App() {
+  return (
+    <>
+      <YourAppRoot />
+      {/* 🚀 Zero-config, interactive in-app toast alerts with swipe-to-dismiss */}
+      <NotificationBannerContainer
+        durationMs={4500}
+        onPress={(notification) => {
+          console.log('User tapped in-app toast:', notification.title);
+        }}
+      />
+    </>
+  );
+}
+```
+
+- **✨ Native Physics**: Smooth spring animations with swipe-up to dismiss gesture.
+- **🛵 Type-Aware**: Renders live order progress bars for `COMMERCE`, sender avatars for `CHAT`, and media thumbnails for `MEDIA`.
+- **🎨 Dark & Light Mode**: Auto-adapts contrast and typography.
+
+---
+
+## ⏰ Local Notification Scheduling
+
+Schedule alarms and reminders at exact timestamps or recurring intervals:
+
+```typescript
+import { RNNOS } from 'react-native-notification-os';
+
+// 1. Schedule for exact time (e.g. 10 minutes from now)
+await RNNOS.scheduleNotification(
+  {
+    id: 'reminder_meeting',
+    messageId: 'rem_1',
+    title: '📅 Standup Meeting in 10 mins',
+    body: 'Join the Google Meet team room',
+    priority: 'HIGH',
+    type: 'GENERIC',
+    timestamp: Date.now(),
+    data: { meetUrl: 'https://meet.google.com/xyz' },
+  },
+  {
+    type: 'TIMESTAMP',
+    timestamp: Date.now() + 10 * 60 * 1000,
+  }
+);
+
+// 2. Schedule recurring interval (e.g. Every 2 hours)
+await RNNOS.scheduleNotification(
+  {
+    id: 'water_reminder',
+    messageId: 'water_1',
+    title: '💧 Hydration Time',
+    body: 'Time to drink a glass of water!',
+    priority: 'DEFAULT',
+    type: 'GENERIC',
+    timestamp: Date.now(),
+    data: {},
+  },
+  {
+    type: 'INTERVAL',
+    intervalSeconds: 7200,
+    repeats: true,
+  }
+);
+
+// 3. Cancel scheduled notification
+await RNNOS.cancelScheduledNotification('water_reminder');
+```
+
+---
+
+## 📬 In-App Notification Center & Inbox (`useNotificationHistory`)
+
+Build a complete Notification Inbox / Activity Feed with a single hook:
+
+```tsx
+import React from 'react';
+import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+import { useNotificationHistory } from 'react-native-notification-os';
+
+export function NotificationInboxScreen() {
+  const { notifications, isLoading, refresh, clearHistory } = useNotificationHistory();
+
+  return (
+    <View style={{ flex: 1 }}>
+      <TouchableOpacity onPress={clearHistory}>
+        <Text>Clear All</Text>
+      </TouchableOpacity>
+
+      <FlatList
+        data={notifications}
+        refreshing={isLoading}
+        onRefresh={refresh}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={{ padding: 14, borderBottomWidth: 1 }}>
+            <Text style={{ fontWeight: 'bold' }}>{item.title}</Text>
+            <Text>{item.body}</Text>
+          </View>
+        )}
+      />
+    </View>
+  );
+}
+```
+
+---
+
+## 🔄 Universal Push Payload Normalizer
+
+Never write messy JSON conversion boilerplate for incoming background push messages:
+
+```typescript
+import { RNNOS } from 'react-native-notification-os';
+
+// Works seamlessly with FCM, APNs, OneSignal, AWS SNS, or custom backends
+const normalized = RNNOS.normalizePayload(rawRemoteMessage);
+console.log(normalized.id, normalized.title, normalized.commerceMetadata);
+```
+
+---
+
 ## 📋 API Reference
+
+### Core Methods
 
 | Method | Return Type | Description |
 | :--- | :--- | :--- |
 | `RNNOS.initialize(config)` | `Promise<boolean>` | Initializes channels, engines, and notification listeners. |
-| `RNNOS.getFCMToken()` | `Promise<string>` | Quietly retrieves Firebase FCM device token. |
-| `RNNOS.requestPermission()` | `Promise<boolean>` | Requests system notification permission dialog. |
+| `RNNOS.getFCMToken()` | `Promise<string>` | Quietly retrieves Firebase FCM device token without prompt. |
+| `RNNOS.requestPermission()` | `Promise<boolean>` | Requests notification permission dialog and awaits user choice. |
 | `RNNOS.checkPermissionStatus()` | `Promise<'GRANTED' \| 'DENIED' \| 'NOT_DETERMINED'>` | Returns current notification permission state without showing dialog. |
-| `RNNOS.openNotificationSettings()` | `Promise<boolean>` | Redirects user to System App Notification Settings page. |
+| `RNNOS.openNotificationSettings()` | `Promise<boolean>` | Redirects user directly to System App Notification Settings. |
 | `RNNOS.presentNotification(payload)` | `Promise<boolean>` | Renders local or remote notification card natively. |
+| `RNNOS.getInitialNotification()` | `Promise<NormalizedNotification \| null>` | Returns the notification that opened the app from a cold/killed launch. |
+| `RNNOS.scheduleNotification(payload, trigger)` | `Promise<boolean>` | Schedules a local notification at a future timestamp or recurring interval. |
+| `RNNOS.cancelScheduledNotification(id)` | `Promise<boolean>` | Cancels a specific scheduled local notification. |
+| `RNNOS.cancelAllScheduledNotifications()` | `Promise<boolean>` | Cancels all pending scheduled notifications. |
+| `RNNOS.getDeliveredNotifications()` | `Promise<NormalizedNotification[]>` | Retrieves currently active notifications in the system notification shade. |
+| `RNNOS.getNotificationHistory(limit, offset)` | `Promise<NormalizedNotification[]>` | Retrieves persistent notification history for building in-app Inbox. |
+| `RNNOS.clearNotificationHistory()` | `Promise<boolean>` | Clears in-app persistent notification history. |
 | `RNNOS.dismissNotification(id)` | `Promise<boolean>` | Dismisses a delivered notification card by ID. |
 | `RNNOS.dismissAllNotifications()` | `Promise<boolean>` | Clears all delivered notification cards. |
-| `RNNOS.onNotificationReceived(cb)` | `() => void` | Unsubscribe listener for incoming notifications. |
+| `RNNOS.normalizePayload(rawPayload)` | `NormalizedNotification` | Universal payload normalizer for FCM, APNs, OneSignal, or custom backends. |
+| `RNNOS.showInAppBanner(payload)` | `void` | Triggers the heads-up in-app toast banner programmatically. |
+| `RNNOS.onNotificationReceived(cb)` | `() => void` | Unsubscribe listener for incoming notifications in foreground & background. |
 | `RNNOS.onNotificationTapped(cb)` | `() => void` | Unsubscribe listener for notification & action button taps. |
+| `RNNOS.onInlineReply(cb)` | `() => void` | Unsubscribe listener for user inline text replies. |
 | `RNNOS.onTokenRefresh(cb)` | `() => void` | Unsubscribe listener for FCM token refresh events. |
-| `RNNOS.setNavigationHandler(handler)` | `void` | Registers a deep link navigation handler for notification taps. |
+| `RNNOS.setNavigationHandler(handler)` | `void` | Registers a deep link navigation handler for automatic routing. |
+
+### React Hooks & Components
+
+| Export | Type | Description |
+| :--- | :--- | :--- |
+| `<NotificationBannerContainer />` | Component | Drop-in animated heads-up toast banner for in-app alerts. |
+| `useNotificationListener(options)` | Hook | Subscribes to notification received, tapped, and inline reply events. |
+| `useChatThread(threadId)` | Hook | Real-time chat thread state, automatic unread count, and reply dispatch. |
+| `useCommerceOrder(orderId)` | Hook | Real-time order tracking progress state and ETA updates. |
+| `useUnreadCount()` | Hook | Reactive app badge counter and badge management utilities. |
+| `useNotificationHistory(limit, offset)` | Hook | Complete notification inbox manager with reactive refresh and clear. |
+| `usePermissionStatus()` | Hook | Reactive permission status checking, request trigger, and settings opener. |
+| `useInAppBanner()` | Hook | Programmatic controller for displaying custom in-app banners. |
 
 ---
 

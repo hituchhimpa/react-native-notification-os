@@ -107,7 +107,10 @@ export interface RuleResult {
 export interface NotificationRule {
   id: string;
   description?: string;
-  condition: (notification: NormalizedNotification, appState: { activeChatId?: string; isForeground: boolean }) => boolean;
+  condition: (
+    notification: NormalizedNotification,
+    appState: { activeChatId?: string; isForeground: boolean }
+  ) => boolean;
   action: RuleResult['action'];
 }
 
@@ -119,6 +122,32 @@ export interface RNNOSPlugin {
   onNotificationDismissed?: (notificationId: string) => void;
 }
 
+export interface TimestampTrigger {
+  type: 'TIMESTAMP';
+  timestamp: number;
+}
+
+export interface IntervalTrigger {
+  type: 'INTERVAL';
+  intervalSeconds: number;
+  repeats?: boolean;
+}
+
+export type NotificationTrigger = TimestampTrigger | IntervalTrigger;
+
+export interface ScheduledNotification {
+  id: string;
+  notification: NormalizedNotification;
+  trigger: NotificationTrigger;
+}
+
+export interface InAppBannerConfig {
+  enabled?: boolean;
+  durationMs?: number;
+  slideFrom?: 'top' | 'bottom';
+  showInForeground?: boolean;
+}
+
 export interface RNNOSConfig {
   appId: string;
   channels?: NotificationChannel[];
@@ -127,4 +156,5 @@ export interface RNNOSConfig {
   plugins?: RNNOSPlugin[];
   autoMarkReadOnScreenFocus?: boolean;
   badgeSyncEnabled?: boolean;
+  inAppBanner?: InAppBannerConfig;
 }

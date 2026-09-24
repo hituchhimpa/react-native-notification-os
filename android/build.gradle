@@ -14,15 +14,14 @@ buildscript {
 
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
-apply plugin: 'kotlin-kapt'
 
 android {
     namespace 'com.rnnos'
-    compileSdkVersion safeExtGet('compileSdkVersion', 35)
+    compileSdkVersion safeExtGet('compileSdkVersion', 34)
 
     defaultConfig {
         minSdkVersion safeExtGet('minSdkVersion', 23)
-        targetSdkVersion safeExtGet('targetSdkVersion', 35)
+        targetSdkVersion safeExtGet('targetSdkVersion', 34)
         versionCode 1
         versionName "1.0.0"
 
@@ -52,11 +51,31 @@ repositories {
     mavenCentral()
 }
 
+def resolveReactNativeVersion() {
+    if (rootProject.ext.has('reactNativeVersion')) {
+        return rootProject.ext.get('reactNativeVersion')
+    }
+    try {
+        def rnPackageJson = file("${rootProject.projectDir}/../node_modules/react-native/package.json")
+        if (rnPackageJson.exists()) {
+            def parsed = new groovy.json.JsonSlurper().parseText(rnPackageJson.text)
+            return parsed.version
+        }
+    } catch (Exception ignored) {}
+    try {
+        def rnPackageJson = file("${projectDir}/../../react-native/package.json")
+        if (rnPackageJson.exists()) {
+            def parsed = new groovy.json.JsonSlurper().parseText(rnPackageJson.text)
+            return parsed.version
+        }
+    } catch (Exception ignored) {}
+    return "0.73.6"
+}
+
 dependencies {
     // ─── React Native: compileOnly so host app's version is used ────────────
-    // Works with RN 0.73.x, 0.74.x, 0.75.x, 0.76.x, 0.77.x, 0.78.x, 0.79.x, 0.80.x+
-    compileOnly "com.facebook.react:react-android"
-    compileOnly "com.facebook.react:hermes-android"
+    def rnVersion = resolveReactNativeVersion()
+    compileOnly "com.facebook.react:react-android:$rnVersion"
 
     implementation "org.jetbrains.kotlin:kotlin-stdlib:${safeExtGet('kotlinVersion', '1.9.0')}"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
@@ -65,11 +84,6 @@ dependencies {
     implementation "androidx.core:core-ktx:1.13.0"
     implementation "androidx.appcompat:appcompat:1.7.0"
     implementation "androidx.work:work-runtime-ktx:2.9.1"
-
-    // Room Database
-    implementation "androidx.room:room-runtime:2.6.1"
-    implementation "androidx.room:room-ktx:2.6.1"
-    kapt "androidx.room:room-compiler:2.6.1"
 
     // Firebase Messaging
     implementation "com.google.firebase:firebase-messaging:24.0.0"

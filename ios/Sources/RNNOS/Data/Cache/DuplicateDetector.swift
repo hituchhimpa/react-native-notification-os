@@ -5,8 +5,8 @@ public final class DuplicateDetector {
     
     private var seenMessageIds: [String: Date] = [:]
     private var collapseKeys: [String: String] = [:]
-    private val lock = NSLock()
-    private val defaultTtlSeconds: TimeInterval = 60.0
+    private let lock = NSLock()
+    private let defaultTtlSeconds: TimeInterval = 60.0
 
     private init() {}
 

@@ -102,10 +102,30 @@ export const InspectorDemoScreen: React.FC = () => {
       {/* Control Buttons */}
       <View style={styles.btnRow}>
         <TouchableOpacity style={styles.triggerBtn} onPress={triggerTestNotification}>
-          <Text style={styles.btnText}>⚡ Present Test Payload</Text>
+          <Text style={styles.btnText}>⚡ Present Now</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.triggerBtn, { backgroundColor: '#8b5cf6' }]}
+          onPress={async () => {
+            await RNNOS.scheduleNotification(
+              {
+                id: `scheduled_${Date.now()}`,
+                messageId: `msg_sched_${Date.now()}`,
+                title: '⏰ Scheduled Alarm Triggered!',
+                body: 'This notification was scheduled 5 seconds ago by RNNOS.',
+                priority: 'HIGH',
+                type: 'GENERIC',
+                timestamp: Date.now(),
+                data: { source: 'scheduler' },
+              },
+              { type: 'INTERVAL', intervalSeconds: 5 }
+            );
+          }}
+        >
+          <Text style={styles.btnText}>⏰ Schedule (5s)</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.triggerBtn, styles.clearBtn]} onPress={clearLogs}>
-          <Text style={styles.btnText}>Clear Timeline</Text>
+          <Text style={styles.btnText}>Clear</Text>
         </TouchableOpacity>
       </View>
 

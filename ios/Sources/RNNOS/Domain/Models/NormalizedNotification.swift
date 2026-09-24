@@ -71,7 +71,7 @@ public struct NormalizedNotification: Codable {
     public let isRead: Bool?
     public let isSuppressed: Bool?
 
-    public static fun parse(jsonString: String) -> NormalizedNotification? {
+    public static func parse(jsonString: String) -> NormalizedNotification? {
         guard let data = jsonString.data(using: .utf8) else { return nil }
         let decoder = JSONDecoder()
         return try? decoder.decode(NormalizedNotification.self, from: data)

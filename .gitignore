@@ -67,6 +67,7 @@ Pods/
 
 # Coverage
 coverage/
-*.hprof
+example/node_modules
 example/node_modules/
 node_modules/
+

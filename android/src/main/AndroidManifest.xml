@@ -31,5 +31,14 @@
                 <action android:name="com.rnnos.ACTION_BUTTON_CLICK" />
             </intent-filter>
         </receiver>
+
+        <!-- Broadcast Receiver for Scheduled Alarms -->
+        <receiver
+            android:name="com.rnnos.core.renderers.NotificationScheduleReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.rnnos.ACTION_SCHEDULED_NOTIFICATION" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

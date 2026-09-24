@@ -4,7 +4,7 @@ public final class CommerceEngine {
     public static let shared = CommerceEngine()
 
     private var activeOrders: [String: CommerceProgress] = [:]
-    private val lock = NSLock()
+    private let lock = NSLock()
 
     private init() {}
 

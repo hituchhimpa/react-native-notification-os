@@ -1,5 +1,6 @@
 package com.rnnos.core.renderers
 
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -16,6 +17,8 @@ import com.rnnos.core.domain.model.NormalizedNotification
 import com.rnnos.core.domain.model.NotificationType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.net.URL
 
 object NotificationRenderer {
@@ -23,14 +26,22 @@ object NotificationRenderer {
     const val KEY_TEXT_REPLY = "key_text_reply"
     const val DEFAULT_CHANNEL_ID = "rnnos_default_channel"
     const val DEFAULT_CHANNEL_NAME = "General Notifications"
+    private const val PREFS_HISTORY = "rnnos_notification_history"
+    private const val KEY_HISTORY_ITEMS = "items"
+    private const val MAX_HISTORY = 200
 
-    fun ensureChannel(context: Context, channelId: String?, channelName: String?) {
+    fun ensureChannel(
+        context: Context,
+        channelId: String?,
+        channelName: String?,
+        importance: Int = NotificationManager.IMPORTANCE_HIGH
+    ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val id = channelId ?: DEFAULT_CHANNEL_ID
             val name = channelName ?: DEFAULT_CHANNEL_NAME
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (manager.getNotificationChannel(id) == null) {
-                val channel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH).apply {
+                val channel = NotificationChannel(id, name, importance).apply {
                     description = "RNNOS Managed Channel"
                     enableVibration(true)
                     enableLights(true)
@@ -41,23 +52,42 @@ object NotificationRenderer {
         }
     }
 
+    private fun getSmallIcon(context: Context): Int {
+        var icon = context.resources.getIdentifier("ic_notification", "drawable", context.packageName)
+        if (icon == 0) {
+            icon = context.resources.getIdentifier("ic_stat_name", "drawable", context.packageName)
+        }
+        if (icon == 0) {
+            icon = context.applicationInfo.icon
+        }
+        if (icon == 0) {
+            icon = android.R.drawable.ic_dialog_info
+        }
+        return icon
+    }
+
     suspend fun render(context: Context, notification: NormalizedNotification, isSilentUpdate: Boolean = false) {
         withContext(Dispatchers.IO) {
             val channelId = notification.category ?: DEFAULT_CHANNEL_ID
             ensureChannel(context, channelId, "Default Channel")
 
+            // Record to history store
+            recordToHistory(context, notification)
+
             val notificationManager = NotificationManagerCompat.from(context)
+            val smallIconRes = getSmallIcon(context)
             val builder = NotificationCompat.Builder(context, channelId)
                 .setContentTitle(notification.title)
                 .setContentText(notification.body)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setSmallIcon(smallIconRes)
+                .setPriority(getPriorityInt(notification.priority))
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setVibrate(longArrayOf(0, 250, 250, 250))
                 .setOnlyAlertOnce(isSilentUpdate)
                 .setAutoCancel(true)
 
             notification.subtitle?.let { builder.setSubText(it) }
+            notification.badge?.let { builder.setNumber(it) }
 
             // Content Intent for Tap Action & Auto-Dismiss
             val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
@@ -65,6 +95,7 @@ object NotificationRenderer {
                 putExtra("notification_id", notification.id)
                 putExtra("thread_id", notification.threadId)
                 putExtra("deep_link", notification.deepLink)
+                putExtra("notification_json", notification.toJsonString())
             }
             if (launchIntent != null) {
                 val contentPendingIntent = PendingIntent.getActivity(
@@ -120,12 +151,12 @@ object NotificationRenderer {
 
                     builder.addAction(actionObj)
                 } else {
-                    // Standard BUTTON or DESTRUCTIVE action button (e.g. Mark Read, Accept, Reject)
                     val buttonIntent = Intent(context, NotificationActionReceiver::class.java).apply {
                         setAction("com.rnnos.ACTION_BUTTON_CLICK")
                         putExtra("notificationId", notification.id)
                         putExtra("threadId", notification.threadId)
                         putExtra("actionId", action.id)
+                        putExtra("deepLink", notification.deepLink)
                     }
 
                     val buttonPendingIntent = PendingIntent.getBroadcast(
@@ -160,7 +191,6 @@ object NotificationRenderer {
             try {
                 notificationManager.notify(notificationIdInt, builder.build())
             } catch (e: SecurityException) {
-                // Permission not granted or notification error
                 e.printStackTrace()
             }
         }
@@ -205,7 +235,7 @@ object NotificationRenderer {
         try {
             builder.setColor(android.graphics.Color.parseColor(accentColorStr))
             builder.setColorized(true)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             builder.setColor(android.graphics.Color.parseColor("#22C55E"))
         }
 
@@ -247,6 +277,101 @@ object NotificationRenderer {
         }
     }
 
+    fun scheduleNotification(context: Context, notification: NormalizedNotification, delaySeconds: Long) {
+        val intent = Intent(context, NotificationScheduleReceiver::class.java).apply {
+            action = "com.rnnos.ACTION_SCHEDULED_NOTIFICATION"
+            putExtra("notification_json", notification.toJsonString())
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            notification.id.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val triggerAt = System.currentTimeMillis() + (delaySeconds * 1000)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+                } else {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+            }
+        } catch (e: SecurityException) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+            } else {
+                alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+            }
+        }
+    }
+
+    fun cancelScheduledNotification(context: Context, id: String) {
+        val intent = Intent(context, NotificationScheduleReceiver::class.java).apply {
+            action = "com.rnnos.ACTION_SCHEDULED_NOTIFICATION"
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            id.hashCode(),
+            intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (pendingIntent != null) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
+        }
+    }
+
+    @Synchronized
+    fun recordToHistory(context: Context, notification: NormalizedNotification) {
+        try {
+            val prefs = context.getSharedPreferences(PREFS_HISTORY, Context.MODE_PRIVATE)
+            val historyStr = prefs.getString(KEY_HISTORY_ITEMS, "[]") ?: "[]"
+            val jsonArray = JSONArray(historyStr)
+            val list = mutableListOf<JSONObject>()
+            list.add(JSONObject(notification.toJsonString()))
+            val max = minOf(jsonArray.length(), MAX_HISTORY - 1)
+            for (i in 0 until max) {
+                list.add(jsonArray.getJSONObject(i))
+            }
+            val newArray = JSONArray()
+            list.forEach { newArray.put(it) }
+            prefs.edit().putString(KEY_HISTORY_ITEMS, newArray.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    @Synchronized
+    fun getNotificationHistory(context: Context, limit: Int, offset: Int): String {
+        try {
+            val prefs = context.getSharedPreferences(PREFS_HISTORY, Context.MODE_PRIVATE)
+            val historyStr = prefs.getString(KEY_HISTORY_ITEMS, "[]") ?: "[]"
+            val array = JSONArray(historyStr)
+            val start = minOf(offset, array.length())
+            val end = minOf(start + limit, array.length())
+            val result = JSONArray()
+            for (i in start until end) {
+                result.put(array.getJSONObject(i))
+            }
+            return result.toString()
+        } catch (_: Exception) {
+            return "[]"
+        }
+    }
+
+    @Synchronized
+    fun clearNotificationHistory(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences(PREFS_HISTORY, Context.MODE_PRIVATE)
+            prefs.edit().remove(KEY_HISTORY_ITEMS).apply()
+        } catch (_: Exception) {}
+    }
+
     private fun downloadBitmap(urlStr: String): Bitmap? {
         return try {
             val url = URL(urlStr)
@@ -255,7 +380,7 @@ object NotificationRenderer {
             connection.connect()
             val input = connection.getInputStream()
             BitmapFactory.decodeStream(input)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }

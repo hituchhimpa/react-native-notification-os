@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
 } from "react-native";
-import { RNNOS } from "react-native-notification-os";
+import { RNNOS, NotificationBannerContainer } from "react-native-notification-os";
 import { ChatDemoScreen } from "./screens/ChatDemoScreen";
 import { CommerceDemoScreen } from "./screens/CommerceDemoScreen";
 import { InspectorDemoScreen } from "./screens/InspectorDemoScreen";
@@ -127,6 +127,9 @@ export default function App() {
         {activeTab === "media" && <MediaDemoScreen />}
         {activeTab === "inspector" && <InspectorDemoScreen />}
       </View>
+
+      {/* Real-time In-App Notification Toast */}
+      <NotificationBannerContainer />
     </SafeAreaView>
   );
 }

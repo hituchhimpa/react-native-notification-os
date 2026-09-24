@@ -15,18 +15,26 @@
   "bugs": {
     "url": "https://github.com/HituChhimpa7/react-native-notification-os/issues"
   },
+  "bin": {
+    "rnnos-setup": "./bin/cli.js"
+  },
   "files": [
     "lib",
+    "bin",
+    "app.plugin.js",
     "android/src",
     "android/build.gradle",
     "android/consumer-rules.pro",
     "ios/Sources",
     "rnnos.podspec",
+    "react-native-notification-os.podspec",
+    "react-native.config.js",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc --declaration --declarationMap",
+    "setup": "node ./bin/cli.js",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build",
     "test": "jest",

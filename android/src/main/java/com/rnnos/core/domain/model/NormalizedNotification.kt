@@ -91,17 +91,25 @@ data class ChatConversation(
 
     companion object {
         fun fromJsonObject(json: JSONObject): ChatConversation {
-            val msgArr = json.optJSONArray("messages") ?: JSONArray()
+            var msgArr = json.optJSONArray("messages")
+            if (msgArr == null) {
+                val str = json.optString("messages", null)
+                if (!str.isNullOrEmpty() && str.startsWith("[")) {
+                    msgArr = try { JSONArray(str) } catch (_: Exception) { null }
+                }
+            }
             val list = mutableListOf<ChatMessage>()
-            for (i in 0 until msgArr.length()) {
-                list.add(ChatMessage.fromJsonObject(msgArr.getJSONObject(i)))
+            if (msgArr != null) {
+                for (i in 0 until msgArr.length()) {
+                    list.add(ChatMessage.fromJsonObject(msgArr.getJSONObject(i)))
+                }
             }
             return ChatConversation(
                 threadId = json.optString("threadId", ""),
                 senderId = json.optString("senderId", ""),
                 senderName = json.optString("senderName", "Sender"),
                 senderAvatar = json.optString("senderAvatar", null),
-                isGroup = json.optBoolean("isGroup", false),
+                isGroup = json.optBoolean("isGroup", json.optString("isGroup") == "true"),
                 groupName = json.optString("groupName", null),
                 messages = list,
                 unreadCount = json.optInt("unreadCount", 0)
@@ -143,7 +151,7 @@ data class CommerceProgress(
             estimatedDelivery = json.optString("estimatedDelivery", null),
             statusText = json.optString("statusText", null),
             trackerUrl = json.optString("trackerUrl", null),
-            silentUpdate = json.optBoolean("silentUpdate", false)
+            silentUpdate = json.optBoolean("silentUpdate", json.optString("silentUpdate") == "true")
         )
     }
 }
@@ -221,15 +229,33 @@ data class NormalizedNotification(
         fun fromJsonString(jsonStr: String): NormalizedNotification {
             val json = JSONObject(jsonStr)
             val dataMap = mutableMapOf<String, Any>()
-            val dataObj = json.optJSONObject("data")
+            
+            var dataObj = json.optJSONObject("data")
+            if (dataObj == null) {
+                val str = json.optString("data", null)
+                if (!str.isNullOrEmpty() && str.startsWith("{")) {
+                    dataObj = try { JSONObject(str) } catch (_: Exception) { null }
+                }
+            }
             dataObj?.keys()?.forEach { key ->
                 dataMap[key] = dataObj.get(key)
             }
 
-            val actionArr = json.optJSONArray("actions") ?: JSONArray()
+            var actionArr = json.optJSONArray("actions")
+            if (actionArr == null) {
+                val str = json.optString("actions", null)
+                if (!str.isNullOrEmpty() && str.startsWith("[")) {
+                    actionArr = try { JSONArray(str) } catch (_: Exception) { null }
+                }
+            }
             val actionList = mutableListOf<NotificationAction>()
-            for (i in 0 until actionArr.length()) {
-                actionList.add(NotificationAction.fromJsonObject(actionArr.getJSONObject(i)))
+            if (actionArr != null) {
+                for (i in 0 until actionArr.length()) {
+                    val item = actionArr.optJSONObject(i)
+                    if (item != null) {
+                        actionList.add(NotificationAction.fromJsonObject(item))
+                    }
+                }
             }
 
             val gradArr = json.optJSONArray("gradientColors") ?: JSONArray()
@@ -238,8 +264,28 @@ data class NormalizedNotification(
                 gradList.add(gradArr.getString(i))
             }
 
-            val typeStr = json.optString("type", "GENERIC")
-            val priorityStr = json.optString("priority", "DEFAULT")
+            val typeStr = json.optString("type", "GENERIC").uppercase()
+            val priorityStr = json.optString("priority", "DEFAULT").uppercase()
+
+            val commerceObj = json.optJSONObject("commerceMetadata")
+                ?: run {
+                    val str = json.optString("commerceMetadata", null)
+                    if (!str.isNullOrEmpty() && str.startsWith("{")) {
+                        try { JSONObject(str) } catch (_: Exception) { null }
+                    } else null
+                }
+
+            val chatObj = json.optJSONObject("chatMetadata")
+                ?: run {
+                    val str = json.optString("chatMetadata", null)
+                    if (!str.isNullOrEmpty() && str.startsWith("{")) {
+                        try { JSONObject(str) } catch (_: Exception) { null }
+                    } else null
+                }
+
+            val badgeVal = if (json.has("badge")) {
+                try { json.getInt("badge") } catch (_: Exception) { json.optString("badge").toIntOrNull() }
+            } else null
 
             return NormalizedNotification(
                 id = json.optString("id", System.currentTimeMillis().toString()),
@@ -247,27 +293,27 @@ data class NormalizedNotification(
                 collapseKey = json.optString("collapseKey", null),
                 threadId = json.optString("threadId", null),
                 category = json.optString("category", null),
-                title = json.getString("title"),
-                body = json.getString("body"),
+                title = json.optString("title", ""),
+                body = json.optString("body", ""),
                 subtitle = json.optString("subtitle", null),
-                badge = if (json.has("badge")) json.getInt("badge") else null,
+                badge = badgeVal,
                 sound = json.optString("sound", null),
-                priority = try { NotificationPriority.valueOf(priorityStr) } catch (e: Exception) { NotificationPriority.DEFAULT },
+                priority = try { NotificationPriority.valueOf(priorityStr) } catch (_: Exception) { NotificationPriority.DEFAULT },
                 avatar = json.optString("avatar", null),
                 imageUrl = json.optString("imageUrl", null),
                 color = json.optString("color", null),
-                useCustomLayout = json.optBoolean("useCustomLayout", false),
+                useCustomLayout = json.optBoolean("useCustomLayout", json.optString("useCustomLayout") == "true"),
                 gradientColors = gradList,
                 deepLink = json.optString("deepLink", null),
                 data = dataMap,
                 actions = actionList,
                 timestamp = json.optLong("timestamp", System.currentTimeMillis()),
-                type = try { NotificationType.valueOf(typeStr) } catch (e: Exception) { NotificationType.GENERIC },
-                commerceMetadata = json.optJSONObject("commerceMetadata")?.let { CommerceProgress.fromJsonObject(it) },
-                chatMetadata = json.optJSONObject("chatMetadata")?.let { ChatConversation.fromJsonObject(it) },
+                type = try { NotificationType.valueOf(typeStr) } catch (_: Exception) { NotificationType.GENERIC },
+                commerceMetadata = commerceObj?.let { CommerceProgress.fromJsonObject(it) },
+                chatMetadata = chatObj?.let { ChatConversation.fromJsonObject(it) },
                 isRead = json.optBoolean("isRead", false),
                 isSuppressed = json.optBoolean("isSuppressed", false),
-                silentUpdate = json.optBoolean("silentUpdate", false)
+                silentUpdate = json.optBoolean("silentUpdate", json.optString("silentUpdate") == "true")
             )
         }
     }

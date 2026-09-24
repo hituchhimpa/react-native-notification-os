@@ -1,10 +1,13 @@
 #import <Foundation/Foundation.h>
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
+#import <UserNotifications/UserNotifications.h>
 #import "rnnos-Swift.h"
 
 @interface RNNOSTurboModule : RCTEventEmitter <RCTBridgeModule>
 @end
+
+static __weak RNNOSTurboModule *weakSharedModule = nil;
 
 @implementation RNNOSTurboModule
 
@@ -14,8 +17,26 @@ RCT_EXPORT_MODULE(RNNOSTurboModule)
     return YES;
 }
 
+- (instancetype)init {
+    if (self = [super init]) {
+        weakSharedModule = self;
+        [[NotificationRenderer shared] setEventEmitterHandler:^(NSString * _Nonnull eventName, NSDictionary<NSString *,id> * _Nonnull body) {
+            RNNOSTurboModule *strongSelf = weakSharedModule;
+            if (strongSelf && strongSelf.bridge) {
+                [strongSelf sendEventWithName:eventName body:body];
+            }
+        }];
+    }
+    return self;
+}
+
 - (NSArray<NSString *> *)supportedEvents {
-    return @[@"onNotificationReceived", @"onNotificationTapped", @"onInlineReply"];
+    return @[
+        @"RNNOS_NotificationReceived",
+        @"RNNOS_ActionTapped",
+        @"RNNOS_InlineReply",
+        @"RNNOS_FCMTokenRefresh"
+    ];
 }
 
 RCT_EXPORT_METHOD(initialize:(NSString *)configJson
@@ -65,23 +86,54 @@ RCT_EXPORT_METHOD(getFCMToken:(RCTPromiseResolveBlock)resolve
     resolve(@"");
 }
 
+RCT_EXPORT_METHOD(getInitialNotification:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    NSString *initialJson = [NotificationRenderer shared].initialNotificationJson;
+    [NotificationRenderer shared].initialNotificationJson = nil;
+    resolve(initialJson ?: [NSNull null]);
+}
+
 RCT_EXPORT_METHOD(presentNotification:(NSString *)notificationJson
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
-    NormalizedNotification *notification = [NormalizedNotification parseWithJsonString:notificationJson];
-    if (!notification) {
-        reject(@"PARSE_ERROR", @"Invalid Notification JSON payload", nil);
-        return;
-    }
-
-    if ([[DuplicateDetector shared] isDuplicateWithNotification:notification]) {
-        resolve(@(NO));
-        return;
-    }
-
-    [[NotificationRenderer shared] renderWithNotification:notification completion:^(BOOL success) {
-        resolve(@(success));
+    [[NotificationRenderer shared] presentNotificationWithJsonString:notificationJson completion:^(BOOL success, NSString * _Nullable error) {
+        if (success) {
+            resolve(@(YES));
+        } else {
+            if (error) {
+                reject(@"PRESENT_ERROR", error, nil);
+            } else {
+                resolve(@(NO));
+            }
+        }
     }];
+}
+
+RCT_EXPORT_METHOD(scheduleNotification:(NSString *)notificationJson
+                  delaySeconds:(double)delaySeconds
+                  repeats:(BOOL)repeats
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    [[NotificationRenderer shared] scheduleNotificationWithJsonString:notificationJson delaySeconds:delaySeconds repeats:repeats completion:^(BOOL success, NSString * _Nullable error) {
+        if (success) {
+            resolve(@(YES));
+        } else {
+            reject(@"SCHEDULE_ERROR", error ?: @"Failed to schedule notification", nil);
+        }
+    }];
+}
+
+RCT_EXPORT_METHOD(cancelScheduledNotification:(NSString *)notificationId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    [[NotificationRenderer shared] cancelScheduledNotificationWithId:notificationId];
+    resolve(@(YES));
+}
+
+RCT_EXPORT_METHOD(cancelAllScheduledNotifications:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    [[NotificationRenderer shared] cancelAllScheduledNotifications];
+    resolve(@(YES));
 }
 
 RCT_EXPORT_METHOD(dismissNotification:(NSString *)notificationId
@@ -116,7 +168,23 @@ RCT_EXPORT_METHOD(getBadgeCount:(RCTPromiseResolveBlock)resolve
 
 RCT_EXPORT_METHOD(getDeliveredNotifications:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
-    resolve(@"[]");
+    [[UNUserNotificationCenter currentNotificationCenter] getDeliveredNotificationsWithCompletionHandler:^(NSArray<UNNotification *> * _Nonnull notifications) {
+        NSMutableArray *list = [NSMutableArray array];
+        for (UNNotification *notif in notifications) {
+            NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+            dict[@"id"] = notif.request.identifier;
+            dict[@"title"] = notif.request.content.title;
+            dict[@"body"] = notif.request.content.body;
+            dict[@"date"] = @([notif.date timeIntervalSince1970] * 1000);
+            if (notif.request.content.userInfo) {
+                dict[@"data"] = notif.request.content.userInfo;
+            }
+            [list addObject:dict];
+        }
+        NSData *data = [NSJSONSerialization dataWithJSONObject:list options:0 error:nil];
+        NSString *jsonStr = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        resolve(jsonStr ?: @"[]");
+    }];
 }
 
 RCT_EXPORT_METHOD(createChannel:(NSString *)channelJson
@@ -129,11 +197,13 @@ RCT_EXPORT_METHOD(getNotificationHistory:(double)limit
                   offset:(double)offset
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
-    resolve(@"[]");
+    NSString *jsonStr = [[NotificationRenderer shared] getNotificationHistoryWithLimit:(NSInteger)limit offset:(NSInteger)offset];
+    resolve(jsonStr ?: @"[]");
 }
 
 RCT_EXPORT_METHOD(clearNotificationHistory:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
+    [[NotificationRenderer shared] clearNotificationHistory];
     resolve(@(YES));
 }
 

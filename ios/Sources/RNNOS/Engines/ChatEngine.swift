@@ -7,7 +7,7 @@ public final class ChatEngine {
     public var activeThreadId: String?
 
     private var conversations: [String: ChatConversation] = [:]
-    private val lock = NSLock()
+    private let lock = NSLock()
 
     private init() {}
 
@@ -64,6 +64,43 @@ public final class ChatEngine {
         }
 
         NotificationRenderer.shared.render(notification: notification)
+    }
+
+    public func appendUserReply(threadId: String, text: String) {
+        lock.lock()
+        let existing = conversations[threadId]
+        var messages = existing?.messages ?? []
+
+        let isDuplicate = messages.contains {
+            $0.senderId == "user_me" && $0.text == text && abs($0.timestamp - (Date().timeIntervalSince1970 * 1000.0)) < 3000
+        }
+
+        if !isDuplicate {
+            messages.append(
+                ChatMessage(
+                    id: "reply_\(Int(Date().timeIntervalSince1970 * 1000))",
+                    text: text,
+                    timestamp: Date().timeIntervalSince1970 * 1000.0,
+                    senderId: "user_me",
+                    senderName: "Me",
+                    senderAvatar: nil
+                )
+            )
+        }
+
+        let updatedConversation = ChatConversation(
+            threadId: threadId,
+            senderId: existing?.senderId ?? "user_me",
+            senderName: existing?.senderName ?? "Me",
+            senderAvatar: existing?.senderAvatar,
+            isGroup: existing?.isGroup ?? false,
+            groupName: existing?.groupName,
+            messages: messages,
+            unreadCount: 0
+        )
+
+        conversations[threadId] = updatedConversation
+        lock.unlock()
     }
 
     public func markThreadAsRead(threadId: String) {
