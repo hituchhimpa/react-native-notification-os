@@ -9,11 +9,11 @@
   "source": "src/index.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/HituChhimpa7/react-native-notification-os.git"
+    "url": "https://github.com/hituchhimpa/react-native-notification-os.git"
   },
-  "homepage": "https://github.com/HituChhimpa7/react-native-notification-os#readme",
+  "homepage": "https://github.com/hituchhimpa/react-native-notification-os#readme",
   "bugs": {
-    "url": "https://github.com/HituChhimpa7/react-native-notification-os/issues"
+    "url": "https://github.com/hituchhimpa/react-native-notification-os/issues"
   },
   "bin": {
     "rnnos-setup": "./bin/cli.js"
@@ -56,7 +56,7 @@
     "jsi",
     "fabric"
   ],
-  "author": "Hitesh Chhimpa <hituchhimpa7@gmail.com> (https://github.com/HituChhimpa7)",
+  "author": "Hitesh Chhimpa <hituchhimpa7@gmail.com> (https://github.com/hituchhimpa)",
   "license": "MIT",
   "dependencies": {
     "@babel/runtime": "^7.0.0"

@@ -28,7 +28,7 @@ A fully working demo app is included in the `example/` folder showcasing all fea
 
 ```bash
 # Step 1: Clone the repo
-git clone https://github.com/HituChhimpa7/react-native-notification-os.git
+git clone https://github.com/hituchhimpa/react-native-notification-os.git
 cd react-native-notification-os
 
 # Step 2: Install root dependencies (builds the library)
@@ -817,4 +817,4 @@ RNNOS.setNavigationHandler((deepLink, data) => {
 
 ## 📄 License
 
-MIT © [Hitesh Chhimpa](https://github.com/HituChhimpa7)
+MIT © [Hitesh Chhimpa](https://github.com/hituchhimpa)
